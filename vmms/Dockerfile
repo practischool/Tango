@@ -1,12 +1,18 @@
 # Autolab - autograding docker image
 
 FROM ubuntu:14.04
-MAINTAINER Mihir Pandya <mihir.m.pandya@gmail.com>
+MAINTAINER Wei Lin <weilin@kidolab.cn>
+
+RUN apt-get update
+
+RUN apt-get -y install software-properties-common
+RUN add-apt-repository -y ppa:openjdk-r/ppa
 
 RUN apt-get update --fix-missing
 RUN apt-get install -y gcc
 RUN apt-get install -y make
 RUN apt-get install -y build-essential
+RUN apt-get -y install openjdk-8-jdk
 
 # Install autodriver
 WORKDIR /home
