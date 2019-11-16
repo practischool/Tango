@@ -61,7 +61,7 @@ RUN mkdir autolab autograde output
 RUN chown autolab:autolab autolab
 RUN chown autolab:autolab output
 RUN chown autograde:autograde autograde
-RUN apt-get install -y git
+RUN apt-get install -y git sudo
 RUN git clone https://github.com/autolab/Tango.git
 WORKDIR Tango/autodriver
 RUN make clean && make
