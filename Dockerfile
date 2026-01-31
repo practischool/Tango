@@ -1,5 +1,5 @@
 # Start with empty ubuntu machine
-FROM ubuntu:18.04
+FROM ubuntu:20.04
 
 MAINTAINER Autolab Development Team "autolab-dev@andrew.cmu.edu"
 
@@ -24,9 +24,9 @@ RUN apt-get update && apt-get install -y \
 	python3 \
 	python3-pip \
 	build-essential \
-	tcl8.5 \
+	tcl8.6 \
 	wget \
-	libgcrypt11-dev \
+	libgcrypt20-dev \
 	zlib1g-dev \
 	apt-transport-https \
 	ca-certificates \
@@ -38,7 +38,18 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /opt/TangoService/Tango/
 
 # Install Docker from Docker Inc. repositories.
-RUN curl -sSL https://get.docker.com/ | sh
+RUN set -eux; \
+    apt-get update; \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates curl gnupg; \
+    install -m 0755 -d /etc/apt/keyrings; \
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc; \
+    chmod a+r /etc/apt/keyrings/docker.asc; \
+    . /etc/os-release; \
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu ${VERSION_CODENAME} stable" > /etc/apt/sources.list.d/docker.list; \
+    apt-get update; \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+      docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin; \
+    apt-get clean; rm -rf /var/lib/apt/lists/*
 
 # Install the magic wrapper.
 ADD ./wrapdocker /usr/local/bin/wrapdocker

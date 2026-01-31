@@ -93,6 +93,7 @@ class TangoJob(object):
         maxOutputFileSize=Config.MAX_OUTPUT_FILE_SIZE,
         accessKeyId=None,
         accessKey=None,
+        disableNetwork=None,
     ):
         self.assigned = False
         self.retries = 0
@@ -112,10 +113,16 @@ class TangoJob(object):
         self._remoteLocation = None
         self.accessKeyId = accessKeyId
         self.accessKey = accessKey
+        self.disableNetwork = disableNetwork
 
     def makeAssigned(self):
         self.syncRemote()
         self.assigned = True
+        self.updateRemote()
+
+    def makeVM(self, vm):
+        self.syncRemote()
+        self.vm = vm
         self.updateRemote()
 
     def makeUnassigned(self):

@@ -249,7 +249,7 @@ class DistDocker(object):
 
         return 0
 
-    def runJob(self, vm, runTimeout, maxOutputFileSize):
+    def runJob(self, vm, runTimeout, maxOutputFileSize, disableNetwork):
         """runJob - Run a docker container by doing the follows:
         - mount directory corresponding to this job to /home/autolab
           in the container
@@ -290,9 +290,12 @@ class DistDocker(object):
             % autodriverCmd
         )
 
-        args = "(docker run --name %s -v %s:/home/mount %s sh -c '%s')" % (
+        disableNetworkArg = "--network none" if disableNetwork else ""
+
+        args = "(docker run --name %s -v %s:/home/mount %s %s sh -c '%s')" % (
             instanceName,
             volumePath,
+            disableNetworkArg,
             vm.image,
             setupCmd,
         )
@@ -475,3 +478,39 @@ class DistDocker(object):
                 result.add(re.sub(r".*/([^/]*)", r"\1", row_l[0]))
 
         return list(result)
+
+    def getPartialOutput(self, vm):
+        """getPartialOutput - Get the partial output of a job.
+        It does not check if the docker container exists before executing
+        as the command will not fail even if the container does not exist.
+        Gets the first MAX_OUTPUT_FILE_SIZE bytes of the feedback file
+        """
+
+        instanceName = self.instanceName(vm.id, vm.image)
+
+        if vm.use_ssh_master:
+            ret = timeout(
+                ["ssh"]
+                + DistDocker._SSH_FLAGS
+                + vm.ssh_flags
+                + DistDocker._SSH_MASTER_CHECK_FLAG
+                + ["%s@%s" % (self.hostUser, vm.domain_name)]
+            )
+            if ret != 0:
+                self.log.debug("Lost persistent SSH connection")
+                return ret
+
+        cmd = "(docker exec %s head -c %s autograde/output.log)" % (
+            instanceName,
+            config.Config.MAX_OUTPUT_FILE_SIZE,
+        )
+
+        output = subprocess.check_output(
+            ["ssh"]
+            + DistDocker._SSH_FLAGS
+            + vm.ssh_flags
+            + ["%s@%s" % (self.hostUser, vm.domain_name), cmd],
+            stderr=subprocess.STDOUT,
+        ).decode("utf-8")
+
+        return output

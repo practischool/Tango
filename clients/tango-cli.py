@@ -1,4 +1,4 @@
-#!/usr/local/bin/python
+#!/usr/bin/env python3
 #
 #
 # tango-cli.py - Command line client for the RESTful Tango.
@@ -60,40 +60,13 @@ pool_help = "Obtain information about a pool of VMs spawned from a specific imag
 parser.add_argument("--pool", action="store_true", help=pool_help)
 prealloc_help = "Create a pool of instances spawned from a specific image. Must specify key with -k. Modify defaults with --image (autograding_image), --num (2), --vmms (localDocker), --cores (1), and --memory (512)."
 parser.add_argument("--prealloc", action="store_true", help=prealloc_help)
+build_help = "Build a docker image. Must specify key with -k, image filename with --filename, and image name with --imageName."
+parser.add_argument("--build", action="store_true", help=build_help)
 
-parser.add_argument("--runJob", help="Run a job from a specific directory")
 parser.add_argument(
-    "-s",
-    "--server",
-    default="localhost",
-    help="Tango server endpoint (default = http://localhost)",
+    "--getPartialOutput", action="store_true", help="Get partial output"
 )
-parser.add_argument(
-    "-P",
-    "--port",
-    default=3000,
-    type=int,
-    help="Tango server port number (default = 3000)",
-)
-parser.add_argument("-k", "--key", help="Key of client")
-parser.add_argument("-l", "--courselab", help="Lab of client")
-
-open_help = "Opens directory for lab. Creates new one if it does not exist. Must specify key with -k and courselab with -l."
-parser.add_argument("-o", "--open", action="store_true", help=open_help)
-upload_help = "Uploads a file. Must specify key with -k, courselab with -l, and filename with --filename."
-parser.add_argument("-u", "--upload", action="store_true", help=upload_help)
-addJob_help = "Submit a job. Must specify key with -k, courselab with -l, and input files with --infiles. Modify defaults with --image (autograding_image), --outputFile (result.out), --jobname (test_job), --maxsize(0), --timeout (0)."
-parser.add_argument("-a", "--addJob", action="store_true", help=addJob_help)
-poll_help = "Poll a given output file. Must specify key with -k, courselab with -l. Modify defaults with --outputFile (result.out)."
-parser.add_argument("-p", "--poll", action="store_true", help=poll_help)
-info_help = "Obtain basic stats about the service such as uptime, number of jobs, number of threads etc. Must specify key with -k."
-parser.add_argument("-i", "--info", action="store_true", help=info_help)
-jobs_help = "Obtain information of live jobs (deadJobs == 0) or dead jobs (deadJobs == 1). Must specify key with -k. Modify defaults with --deadJobs (0)."
-parser.add_argument("-j", "--jobs", action="store_true", help=jobs_help)
-pool_help = "Obtain information about a pool of VMs spawned from a specific image. Must specify key with -k. Modify defaults with --image (autograding_image)."
-parser.add_argument("--pool", action="store_true", help=pool_help)
-prealloc_help = "Create a pool of instances spawned from a specific image. Must specify key with -k. Modify defaults with --image (autograding_image), --num (2), --vmms (localDocker), --cores (1), and --memory (512)."
-parser.add_argument("--prealloc", action="store_true", help=prealloc_help)
+parser.add_argument("--jobid", help="Job ID")
 
 parser.add_argument("--runJob", help="Run a job from a specific directory")
 parser.add_argument("--numJobs", type=int, default=1, help="Number of jobs to run")
@@ -106,6 +79,7 @@ parser.add_argument(
 parser.add_argument(
     "--image", default="", help='VM image name (default "autograding_image")'
 )
+parser.add_argument("--imageName", help="Name for new VM image to be built")
 parser.add_argument(
     "--infiles",
     nargs="+",
@@ -142,10 +116,15 @@ parser.add_argument(
     "--notifyURL",
     help="Complete URL for Tango to give callback to once job is complete.",
 )
+parser.add_argument(
+    "--disableNetwork",
+    action="store_true",
+    default=False,
+    help="Disable network access for autograding containers.",
+)
 
 # add for aws student accounts
 parser.add_argument("--accessKeyId", default="", help="AWS account access key ID")
-
 parser.add_argument("--accessKey", default="", help="AWS account access key content")
 
 
@@ -180,6 +159,13 @@ def checkInfiles():
 def checkDeadjobs():
     if args.deadJobs is None:
         print("Deadjobs must be specified with --deadJobs")
+        return -1
+    return 0
+
+
+def checkImageName():
+    if args.imageName is None:
+        print("Image name must be specified with --imageName")
         return -1
     return 0
 
@@ -272,6 +258,7 @@ def tango_addJob():
 
         requestObj["accessKeyId"] = args.accessKeyId
         requestObj["accessKey"] = args.accessKey
+        requestObj["disable_network"] = args.disableNetwork
 
         response = requests.post(
             "%s://%s:%d/addJob/%s/%s/"
@@ -288,6 +275,45 @@ def tango_addJob():
         print(
             "Failed to send request to %s:%d/addJob/%s/%s/ \t jobObj=%s"
             % (args.server, args.port, args.key, args.courselab, json.dumps(requestObj))
+        )
+        print(str(err))
+        sys.exit(0)
+
+
+# getPartialOutput
+
+
+def tango_getPartialOutput():
+    try:
+        response = requests.get(
+            "%s://%s:%d/getPartialOutput/%s/%s/"
+            % (
+                _tango_protocol,
+                args.server,
+                args.port,
+                args.key,
+                args.jobid,
+            )
+        )
+        print(
+            "Sent request to %s:%d/getPartialOutput/%s/%s/"
+            % (
+                args.server,
+                args.port,
+                args.key,
+                args.jobid,
+            )
+        )
+        print(response.text)
+    except Exception as err:
+        print(
+            "Failed to send request to %s:%d/getPartialOutput/%s/%s/"
+            % (
+                args.server,
+                args.port,
+                args.key,
+                args.jobid,
+            )
         )
         print(str(err))
         sys.exit(0)
@@ -477,6 +503,35 @@ def file_to_dict(file):
         return {"localFile": file, "destFile": file}
 
 
+# build
+
+
+def tango_build():
+    try:
+        res = checkKey() + checkFilename() + checkImageName()
+        if res != 0:
+            raise Exception("Invalid usage: [build] " + build_help)
+
+        f = open(args.filename, "rb")
+        header = {"imageName": args.imageName}
+        response = requests.post(
+            "%s://%s:%d/build/%s/"
+            % (_tango_protocol, args.server, args.port, args.key),
+            data=f.read(),
+            headers=header,
+        )
+        print("Sent request to %s:%d/build/%s/" % (args.server, args.port, args.key))
+        print(response.text)
+
+    except Exception as err:
+        print(
+            "Failed to send request to %s:%d/build/%s/"
+            % (args.server, args.port, args.key)
+        )
+        print(str(err))
+        sys.exit(0)
+
+
 # runJob
 
 
@@ -535,6 +590,10 @@ def router():
         tango_prealloc()
     elif args.runJob:
         tango_runJob()
+    elif args.getPartialOutput:
+        tango_getPartialOutput()
+    elif args.build:
+        tango_build()
 
 
 #
@@ -551,6 +610,8 @@ if (
     and not args.pool
     and not args.prealloc
     and not args.runJob
+    and not args.getPartialOutput
+    and not args.build
 ):
     parser.print_help()
     sys.exit(0)
